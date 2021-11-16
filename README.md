@@ -33,3 +33,7 @@ Swing the object and release it and the object will be carry on with its momentu
 What is not working?
 --------------------
 - The rigid body weight will not influence the way it is picked up but only the throw distance.
+
+Want to buy me a coffee?
+--------------------------
+Patreon: https://www.patreon.com/cptfurball
