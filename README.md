@@ -4,15 +4,18 @@ DEMO: https://youtu.be/wTyDLJK8Mww
 
 Controls
 --------
-W - Move forward
-S - Move backward
-A - Move left
-D - Move right
-Left Ctrl (hold/toggle) - Crouc
 
-E (toggle) - Pickup object
-T + Mouse move (while holding an object) - Rotate object in space
-Left click (while holding an object) - Throw object
+Movement:
+- W - Move forward
+- S - Move backward
+- A - Move left
+- D - Move right
+- Left Ctrl (hold/toggle) - Crouc
+
+Pick up:
+- E (toggle) - Pickup object
+- T + Mouse move (while holding an object) - Rotate object in space
+- Left click (while holding an object) - Throw object
 
 How to use the pickup?
 ----------------------
@@ -23,6 +26,9 @@ The rigid body to be picked up will react to its surroundings. Blocked by a wall
 
 If you do not need the player, you can swap it out with your own player controller. But reattach the `Container` and the `Crosshair` node provided in this project as it serves as a way to mount and detect rigid body. Just make sure all the referenced nodes in all the scripts are referenced correctly according to your own hierarchy.
 
+Whats fun?
+----------
+Swing the object and release it and the object will be carry on with its momentum.
 
 What is not working?
 --------------------
