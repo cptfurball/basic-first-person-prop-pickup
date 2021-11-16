@@ -12,7 +12,7 @@ _global_script_classes=[ {
 "base": "RigidBody",
 "class": "LightProp",
 "language": "GDScript",
-"path": "res://props/proto_props/box.gd"
+"path": "res://props/light_prop.gd"
 } ]
 _global_script_class_icons={
 "LightProp": "res://Assets/Icons/RigidBody3D.svg"

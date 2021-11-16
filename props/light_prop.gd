@@ -18,6 +18,9 @@ const CONTAINER_MASK_DETACH_MODE: int = 7
 
 # REQUIRED: Please include this key on your input map. It can be any key you want
 const KEY_DETACH: String = 'interact' 
+const DEFAULT_THROW_POWER: float = 5.0
+const KEY_FIRE: String = 'fire'
+const KEY_INSPECT: String = 'inspect'
 
 
 # Exported (Never update this on runtime)
@@ -29,14 +32,19 @@ export(float, 0.0, 1.0, 0.05) var mouse_y_sensitivity = 0.1
 # Runtime
 var prop_container: Node
 
+func _input(event):
+	if event is InputEventMouseMotion and prop_container and Input.is_action_pressed(KEY_INSPECT):
+		# rotate the player body
+		rotate_y(deg2rad(-event.relative.x * mouse_x_sensitivity))
 
-func _ready():
-	angular_damp = ANGULAR_DAMP
+		# rotate the camera on x axis (look up or down)
+		rotate_x(deg2rad(-event.relative.y * mouse_y_sensitivity))
 
 
 func _process(_delta):
 	if prop_container:
 		move()
+		detach_and_throw()
 
 
 # This method tries to move the prop towards the prop container origin.
@@ -69,6 +77,7 @@ func move():
 func attach(causer: Node):
 	collision_mask = CONTAINER_MASK_ATTACH_MODE
 	prop_container = causer
+	angular_damp = ANGULAR_DAMP
 
 
 # The opposite of detach. This will reset the collision mask
@@ -78,3 +87,16 @@ func attach(causer: Node):
 func detach():
 	collision_mask = CONTAINER_MASK_DETACH_MODE
 	prop_container = null
+	angular_damp = -1
+
+
+# Throws the object to a certain direction the parent is facing
+func detach_and_throw() -> void:
+	if Input.is_action_just_pressed(KEY_FIRE):
+		var throw_power = DEFAULT_THROW_POWER
+
+		if 'throw_power' in prop_container:
+			throw_power = prop_container.throw_power
+
+		apply_central_impulse(-prop_container.global_transform.basis.z * throw_power)
+		detach()

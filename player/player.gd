@@ -1,180 +1,238 @@
 extends KinematicBody
 
-# NOTE: This fps control script is from the Godot asset store. 
-# This is not written by user CptFurball.
 
-###################-VARIABLES-####################
-
-# Camera
-export(float) var mouse_sensitivity = 8.0
-export(NodePath) var head_path = "Head"
-export(NodePath) var cam_path = "Head/CameraXPivot/Camera"
-export(float) var FOV = 80.0
-var mouse_axis := Vector2()
-onready var head: Spatial = get_node(head_path)
-onready var cam: Camera = get_node(cam_path)
-# Move
-var velocity := Vector3()
-var direction := Vector3()
-var move_axis := Vector2()
-var snap := Vector3()
-var sprint_enabled := true
-var sprinting := false
-# Walk
 const FLOOR_MAX_ANGLE: float = deg2rad(46.0)
-export(float) var gravity = 30.0
-export(int) var walk_speed = 5
-export(int) var sprint_speed = 10
-export(int) var acceleration = 8
-export(int) var deacceleration = 10
+const KEY_MOVE_FORWARD: String = 'movement.forward'
+const KEY_MOVE_BACKWARD: String = 'movement.backward'
+const KEY_STRAFE_LEFT: String = 'movement.left'
+const KEY_STRAFE_RIGHT: String = 'movement.right'
+const KEY_JUMP: String = 'movement.jump'
+const KEY_SPRINT: String = 'movement.sprint'
+const KEY_CROUCH: String = 'movement.crouch'
+const STAND_HEIGHT = 0.9
+const CROUCH_HEIGHT = 0.3
+const CAMERA_HEIGHT_OFFSET = 0.3
+const KEY_INSPECT: String = 'inspect'
+
+
+# Exported (Never update this on runtime)
+export(float, 0.0, 1.0, 0.05) var mouse_x_sensitivity = 0.1
+export(float, 0.0, 1.0, 0.05) var mouse_y_sensitivity = 0.1
+export(float, 0.0, 90.0, 0.05) var max_mouse_x_degree = 70.0
+
+export(float, 0.0, 100.0, 0.05) var walk_move_speed = 5
+export(float, 0.0, 100.0, 0.05) var crouch_move_speed = 3
+export(float, 0.0, 100.0, 0.05) var sprint_move_speed = 10
+export(float, 0.0, 100.0, 0.05) var acceleration = 5
+export(float, 0.0, 100.0, 0.05) var deceleration = 10
+
+export(bool) var jump_enabled = true
+export(float, 0.0, 100.0, 0.05) var jump_height = 7
+export(float, 0.0, 100.0, 0.05) var grav_acceleration = 25
 export(float, 0.0, 1.0, 0.05) var air_control = 0.3
-export(int) var jump_height = 10
-var _speed: int
-var _is_sprinting_input := false
-var _is_jumping_input := false
 
-##################################################
+export(bool) var crouch_toggle_mode = false
+export(float, 0.0, 10.0, 0.05) var crouch_speed = 6
+export(float, 0.0, 100.0, 0.05) var throw_power = 20
 
-# Called when the node enters the scene tree
-func _ready() -> void:
+
+# Runtime 
+var direction: Vector3 = Vector3.ZERO
+var velocity: Vector3 = Vector3.ZERO
+var move_speed: float = 0
+var snap: Vector3 = Vector3.ZERO
+var crouching: bool = false
+var jumping: bool = false
+
+
+# Nodes
+onready var head = get_node('Head')
+onready var camera_x_pivot = get_node('Head/CameraXPivot')
+onready var top_head_ray_cast = get_node('Head/TopHeadRayCast') 
+onready var crosshair_ray_cast = get_node('Head/CameraXPivot/CrosshairRayCast')
+onready var body_collision = get_node('BodyCollision')
+onready var prop_container = get_node('Head/CameraXPivot/Container')
+
+
+func _ready():
 	Input.set_mouse_mode(Input.MOUSE_MODE_CAPTURED)
-	cam.fov = FOV
 
 
-# Called every frame. 'delta' is the elapsed time since the previous frame
-func _process(_delta: float) -> void:
-	move_axis.x = Input.get_action_strength("movement.forward") - Input.get_action_strength("movement.backward")
-	move_axis.y = Input.get_action_strength("movement.right") - Input.get_action_strength("movement.left")
+func _input(event):
+	if event is InputEventMouseMotion and !(Input.is_action_pressed(KEY_INSPECT) and prop_container.prop):
+		process_camera_motion(event.relative)
+
+
+func _process(delta):
+	set_direction()
+	set_jumping()
+	set_crouching()
+	set_move_speed()
+
+	if !(Input.is_action_pressed(KEY_INSPECT) and prop_container.prop):
+		move(delta)
+		crouch(delta)
 	
-	if Input.is_action_just_pressed("movement.jump"):
-		_is_jumping_input = true
-	
-	if Input.is_action_pressed("movement.sprint"):
-		_is_sprinting_input = true
+	rigid_body_collision()
 
 
-# Called every physics tick. 'delta' is constant
-func _physics_process(delta: float) -> void:
-	walk(delta)
-
-
-# Called when there is an input event
-func _input(event: InputEvent) -> void:
-	if event is InputEventMouseMotion:
-		mouse_axis = event.relative
-		camera_rotation()
-
-
-func walk(delta: float) -> void:
-	direction_input()
-	
-	if is_on_floor():
-		snap = -get_floor_normal() - get_floor_velocity() * delta
-		
-		# Workaround for sliding down after jump on slope
-		if velocity.y < 0:
-			velocity.y = 0
-		
-		jump()
+# Sets the 'move_speed' based on the argument.
+# If non provided, 'move_speed' is set based on
+# the player's status (walk, run, crouch, etc)
+func set_move_speed(speed = null) -> void:
+	if speed is float:
+		move_speed = speed
 	else:
-		# Workaround for 'vertical bump' when going off platform
-		if snap != Vector3.ZERO && velocity.y != 0:
-			velocity.y = 0
-		
-		snap = Vector3.ZERO
-		
-		velocity.y -= gravity * delta
-	
-	sprint(delta)
-	
-	accelerate(delta)
-	
-	velocity = move_and_slide_with_snap(velocity, snap, Vector3.UP, true, 4, FLOOR_MAX_ANGLE)
-	_is_jumping_input = false
-	_is_sprinting_input = false
+		move_speed = walk_move_speed
+
+		if crouching and is_on_floor():
+			move_speed = crouch_move_speed
+		elif Input.is_action_pressed(KEY_SPRINT):
+			move_speed = sprint_move_speed
 
 
-func camera_rotation() -> void:
-	if Input.get_mouse_mode() != Input.MOUSE_MODE_CAPTURED:
-		return
-	if mouse_axis.length() > 0:
-		var horizontal: float = -mouse_axis.x * (mouse_sensitivity / 100)
-		var vertical: float = -mouse_axis.y * (mouse_sensitivity / 100)
-		
-		mouse_axis = Vector2()
-		
-		rotate_y(deg2rad(horizontal))
-		head.rotate_x(deg2rad(vertical))
-		
-		# Clamp mouse rotation
-		var temp_rot: Vector3 = head.rotation_degrees
-		temp_rot.x = clamp(temp_rot.x, -90, 90)
-		head.rotation_degrees = temp_rot
-
-
-func direction_input() -> void:
-	direction = Vector3()
-	var aim: Basis = get_global_transform().basis
-	if move_axis.x >= 0.5:
-		direction -= aim.z
-	if move_axis.x <= -0.5:
-		direction += aim.z
-	if move_axis.y <= -0.5:
-		direction -= aim.x
-	if move_axis.y >= 0.5:
-		direction += aim.x
-	direction.y = 0
-	direction = direction.normalized()
-
-
-func accelerate(delta: float) -> void:
-	# Where would the player go
-	var _temp_vel: Vector3 = velocity
-	var _temp_accel: float
-	var _target: Vector3 = direction * _speed
-	
-	_temp_vel.y = 0
-	if direction.dot(_temp_vel) > 0:
-		_temp_accel = acceleration
-		
+# Set the direction based on the input given by the player
+# and process them into normalized direction vector. 
+#
+# This sets direction for xz-plane.
+# Refer to Jump mechanics for y-axis.
+func set_direction(dir = null) -> void:
+	if dir is Vector3:
+		direction = dir.normalized() * Vector3(1, 0, 1)
 	else:
-		_temp_accel = deacceleration
-	
+		direction = Vector3.ZERO
+
+		if Input.is_action_pressed(KEY_MOVE_FORWARD):
+			direction -= transform.basis.z
+
+		if Input.is_action_pressed(KEY_MOVE_BACKWARD):
+			direction += transform.basis.z
+
+		if Input.is_action_pressed(KEY_STRAFE_LEFT):
+			direction -= transform.basis.x
+
+		if Input.is_action_pressed(KEY_STRAFE_RIGHT):
+			direction += transform.basis.x
+
+		direction = direction.normalized() * Vector3(1, 0, 1)
+
+
+# Set the 'crouching' flag based on the argument. 
+# If non given, the 'crouching' flag is set based on player input.
+#
+# Crouch input has 2 modes. The toggle mode and non-toggle.
+func set_crouching(crouch = null) -> void:
+	if crouch == null:
+		if crouch_toggle_mode == true:
+			if Input.is_action_just_pressed(KEY_CROUCH):
+				crouching = !crouching
+
+		else:
+			if Input.is_action_pressed(KEY_CROUCH):
+				crouching = true
+			else:
+				crouching = false
+	elif crouch is bool:
+		crouching = crouch
+
+
+# Sets the 'jumping' flag based on the argument.
+# If non given, it detects the jumping input from the player input
+func set_jumping(jump = null) -> void:
+	if jump is bool:
+		jumping = jump
+	else:
+		jumping = Input.is_action_just_pressed(KEY_JUMP) and jump_enabled
+
+
+# Moves the player. Processing of velocity on zx-plane and y-axis are
+# done seperately as they have different mechanics.
+#
+# Move function includes actions like walk, sprint and jump. Any process
+# with requires the player to be moved from one to another in 3d space.
+func move(delta):
+	# Process the x component
+	var xz_comp = velocity * Vector3(1, 0, 1)
+	var target_move_velocity: Vector3 = direction * move_speed
+	var acc: float
+
+	if direction.dot(xz_comp) > 0:
+		acc = acceleration
+	else:
+		acc = deceleration
+
 	if not is_on_floor():
-		_temp_accel *= air_control
-	
-	# Interpolation
-	_temp_vel = _temp_vel.linear_interpolate(_target, _temp_accel * delta)
-	
-	velocity.x = _temp_vel.x
-	velocity.z = _temp_vel.z
-	
-	# Make too low values zero
-	if direction.dot(velocity) == 0:
-		var _vel_clamp := 0.01
-		if abs(velocity.x) < _vel_clamp:
-			velocity.x = 0
-		if abs(velocity.z) < _vel_clamp:
-			velocity.z = 0
+		acc *= air_control
+
+	xz_comp = xz_comp.linear_interpolate(target_move_velocity, acc * delta)
+
+	# Process the y component
+	var y_comp: Vector3 = velocity * Vector3(0, 1, 0)
+
+	if top_head_ray_cast.is_colliding():
+		y_comp.y = 0
+
+	if is_on_floor():
+		snap = - get_floor_normal() - get_floor_velocity() * delta
+
+		if y_comp.y < 0:
+			y_comp.y = 0
+
+		if jumping and not top_head_ray_cast.is_colliding():
+			y_comp.y = jump_height
+			snap = Vector3.ZERO
+	else: 
+		if snap != Vector3.ZERO and y_comp.y != 0:
+			y_comp.y = 0
+
+		y_comp.y -= grav_acceleration * delta
+
+		snap = Vector3.ZERO		
+
+	# Combine the xz component and y component
+	velocity = xz_comp + y_comp
+
+	# Move the player
+	var _velocity = move_and_slide_with_snap(velocity, snap, Vector3.UP, true, 4, FLOOR_MAX_ANGLE, false)
 
 
-func jump() -> void:
-	if _is_jumping_input:
-		velocity.y = jump_height
-		snap = Vector3.ZERO
-
-
-func sprint(delta: float) -> void:
-	if can_sprint():
-		_speed = sprint_speed
-		cam.set_fov(lerp(cam.fov, FOV * 1.05, delta * 8))
-		sprinting = true
-		
+# Logic for resizing the player collision capsule to crouch under an obstacle.
+# This also moves the camera to a lower position when crouching.
+func crouch(delta) -> void:
+	if crouching:
+		body_collision.shape.height -= crouch_speed * delta
 	else:
-		_speed = walk_speed
-		cam.set_fov(lerp(cam.fov, FOV, delta * 8))
-		sprinting = false
+		if not top_head_ray_cast.is_colliding():
+			body_collision.shape.height += crouch_speed * delta
+
+	body_collision.shape.height = clamp(body_collision.shape.height, CROUCH_HEIGHT, STAND_HEIGHT)
+	head.translation.y = body_collision.shape.height / 2 + CAMERA_HEIGHT_OFFSET
 
 
-func can_sprint() -> bool:
-	return (sprint_enabled and is_on_floor() and _is_sprinting_input and move_axis.x >= 0.5)
+# As move_and_slide_with_snap infinite inertia was set to false,
+# this is a work around so that player can still push objects when bumped into it.
+# The resistance of the rigid body depends on the weight of the rigid body.
+func rigid_body_collision():
+	for index in get_slide_count():
+		var collision = get_slide_collision(index)
+		var collider = collision.collider
+
+		if collider is RigidBody and collider.mode == RigidBody.MODE_RIGID:
+
+			var delta_velocity = velocity.length() -  collision.collider_velocity.length()
+
+			if delta_velocity < 0:
+				delta_velocity = 0
+
+			var impulse = -collision.normal.normalized() * delta_velocity
+			collider.apply_central_impulse(impulse)
+
+
+# Rotates the camera based on the input
+func process_camera_motion(relative_vector: Vector2) -> void:
+	# rotate the player body
+	rotate_y(deg2rad(-relative_vector.x * mouse_x_sensitivity))
+
+	# rotate the camera on x axis (look up or down)
+	camera_x_pivot.rotate_x(deg2rad(-relative_vector.y * mouse_y_sensitivity))
+	camera_x_pivot.rotation.x = clamp(camera_x_pivot.rotation.x, deg2rad(-max_mouse_x_degree), deg2rad(max_mouse_x_degree))

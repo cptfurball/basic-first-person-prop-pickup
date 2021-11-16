@@ -1,6 +1,6 @@
 [gd_scene load_steps=5 format=2]
 
-[ext_resource path="res://props/proto_props/box.gd" type="Script" id=1]
+[ext_resource path="res://props/light_prop.gd" type="Script" id=1]
 
 [sub_resource type="BoxShape" id=7]
 extents = Vector3( 0.5, 0.5, 0.5 )
@@ -22,7 +22,6 @@ transmission = Color( 1, 0.458824, 0.458824, 1 )
 [node name="Box" type="RigidBody"]
 collision_layer = 4
 collision_mask = 7
-mass = 10.0
 contacts_reported = 3
 contact_monitor = true
 script = ExtResource( 1 )

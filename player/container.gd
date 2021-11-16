@@ -2,7 +2,15 @@ extends Spatial
 
 
 const KEY_INTERACT: String = 'interact'
+const MOUSE_WHEEL_UP: String = 'mouse_wheel_up'
+const MOUSE_WHEEL_DOWN: String = 'mouse_wheel_down'
+const DEFAULT_POS: Vector3 = Vector3(0, 0, -1.5)
 
+# Exported (Never update this on runtime)
+export(float, 0.0, 100.0, 0.05) var throw_power = 5
+export(float, 0.0, 100.0, 0.05) var scroll_speed = 0.05
+export(float, 0.0, 3.0, 0.05) var min_distance = -2.5
+export(float, 0.0, 2.0, 0.05) var max_distance = -0.5
 
 # Nodes
 onready var crosshair_ray_cast = get_node('../Crosshair')
@@ -10,6 +18,18 @@ onready var crosshair_ray_cast = get_node('../Crosshair')
 
 # Runtime 
 var prop: LightProp
+
+
+func _ready():
+	pass # Replace with function body.
+
+
+func _input(event):
+	if event is InputEventMouseButton:
+		if Input.is_action_just_pressed(MOUSE_WHEEL_DOWN) and prop:
+			translate(Vector3(0, 0, scroll_speed))
+		elif Input.is_action_just_pressed(MOUSE_WHEEL_UP) and prop:
+			translate(Vector3(0, 0, -scroll_speed))
 
 
 func _process(_delta):
