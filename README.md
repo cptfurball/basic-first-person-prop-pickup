@@ -36,4 +36,4 @@ What is not working?
 
 Want to buy me a coffee?
 --------------------------
-Patreon: https://www.patreon.com/cptfurball
+Ko-Fi: https://ko-fi.com/cptfurball
